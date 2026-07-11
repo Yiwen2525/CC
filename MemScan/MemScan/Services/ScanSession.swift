@@ -130,63 +130,52 @@ final class ScanSession: ObservableObject {
 
     private func runFirstScan(value: Double) throws {
         var error: NSError?
-        let capacity = 500
+        MemScanBridge.runFirstScan(
+            withValue: value,
+            dataType: dataType.bridgeType,
+            regionFilter: searchScope.bridgeFilter,
+            error: &error
+        )
 
-        try BridgeBuffer.withScanMatchBuffer(capacity) { buffer, capacity in
-            let count = MemScanBridge.firstScan(
-                withValue: value,
-                dataType: dataType.bridgeType,
-                regionFilter: searchScope.bridgeFilter,
-                matches: buffer,
-                capacity: capacity,
-                error: &error
-            )
+        if let error {
+            throw ScanError.scanFailed(error.localizedDescription)
+        }
 
-            if let error {
-                throw ScanError.scanFailed(error.localizedDescription)
-            }
-
-            if count == 0 && MemScanBridge.storedResultCount() == 0 {
-                throw ScanError.noResults
-            }
+        if MemScanBridge.storedResultCount() == 0 {
+            throw ScanError.noResults
         }
     }
 
     private func runRefineScan(value: Double) throws {
         var error: NSError?
-        let capacity = 500
+        MemScanBridge.runRefineScan(
+            withValue: value,
+            mode: refineMode.bridgeMode,
+            dataType: dataType.bridgeType,
+            error: &error
+        )
 
-        try BridgeBuffer.withScanMatchBuffer(capacity) { buffer, capacity in
-            let count = MemScanBridge.refineScan(
-                withValue: value,
-                mode: refineMode.bridgeMode,
-                dataType: dataType.bridgeType,
-                matches: buffer,
-                capacity: capacity,
-                error: &error
-            )
+        if let error {
+            throw ScanError.scanFailed(error.localizedDescription)
+        }
 
-            if let error {
-                throw ScanError.scanFailed(error.localizedDescription)
-            }
-
-            if count == 0 && MemScanBridge.storedResultCount() == 0 {
-                throw ScanError.noResults
-            }
+        if MemScanBridge.storedResultCount() == 0 {
+            throw ScanError.noResults
         }
     }
 
     private func loadResults(limit: Int) -> [ScanResult] {
-        let total = MemScanBridge.storedResultCount()
-        guard total > 0 else { return [] }
-
-        let capacity = min(total, limit)
-        return BridgeBuffer.withScanMatchBuffer(capacity) { buffer, capacity in
-            let count = MemScanBridge.copyResultsTo(buffer, capacity: capacity)
-            return (0..<count).map { index in
-                let item = buffer[index]
-                return ScanResult(address: item.address, value: item.value)
+        let list = MemScanBridge.fetchResults(withLimit: limit)
+        return list.compactMap { item in
+            guard let dict = item as? [String: Any],
+                  let addressNumber = dict["address"] as? NSNumber,
+                  let valueNumber = dict["value"] as? NSNumber else {
+                return nil
             }
+            return ScanResult(
+                address: addressNumber.uint64Value,
+                value: valueNumber.doubleValue
+            )
         }
     }
 }

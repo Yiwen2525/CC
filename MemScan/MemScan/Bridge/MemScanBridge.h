@@ -48,6 +48,20 @@ typedef NS_ENUM(NSInteger, MSRefineMode) {
 + (BOOL)isMemoryAccessAvailable;
 + (NSString *)memoryAccessErrorMessage;
 
++ (NSArray<NSDictionary *> *)fetchProcessList;
+
++ (NSInteger)runFirstScanWithValue:(double)value
+                          dataType:(MSDataType)dataType
+                      regionFilter:(MSRegionFilter)regionFilter
+                             error:(NSError **)error;
+
++ (NSInteger)runRefineScanWithValue:(double)value
+                               mode:(MSRefineMode)mode
+                           dataType:(MSDataType)dataType
+                              error:(NSError **)error;
+
++ (NSArray<NSDictionary *> *)fetchResultsWithLimit:(NSInteger)limit;
+
 + (NSInteger)listProcesses:(MSProcessInfo *)buffer capacity:(NSInteger)capacity;
 + (BOOL)attachToPID:(int32_t)pid error:(NSError **)error;
 + (void)detach;

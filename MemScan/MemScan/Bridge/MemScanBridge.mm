@@ -384,4 +384,63 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
     return count;
 }
 
++ (NSArray<NSDictionary *> *)fetchProcessList {
+    const NSInteger capacity = 2048;
+    std::vector<MSProcessInfo> buffer((size_t)capacity);
+    const NSInteger count = [self listProcesses:buffer.data() capacity:capacity];
+    if (count <= 0) return @[];
+
+    NSMutableArray<NSDictionary *> *results = [NSMutableArray arrayWithCapacity:(NSUInteger)count];
+    for (NSInteger i = 0; i < count; i++) {
+        const MSProcessInfo &info = buffer[(size_t)i];
+        NSString *name = [NSString stringWithUTF8String:info.name] ?: @"";
+        NSString *bundleID = [NSString stringWithUTF8String:info.bundle_id] ?: @"";
+        [results addObject:@{
+            @"pid": @(info.pid),
+            @"name": name,
+            @"bundleID": bundleID
+        }];
+    }
+    return results;
+}
+
++ (NSInteger)runFirstScanWithValue:(double)value
+                          dataType:(MSDataType)dataType
+                      regionFilter:(MSRegionFilter)regionFilter
+                             error:(NSError **)error {
+    return [self firstScanWithValue:value
+                           dataType:dataType
+                       regionFilter:regionFilter
+                            matches:NULL
+                           capacity:0
+                               error:error];
+}
+
++ (NSInteger)runRefineScanWithValue:(double)value
+                               mode:(MSRefineMode)mode
+                           dataType:(MSDataType)dataType
+                              error:(NSError **)error {
+    return [self refineScanWithValue:value
+                                mode:mode
+                            dataType:dataType
+                             matches:NULL
+                            capacity:0
+                                error:error];
+}
+
++ (NSArray<NSDictionary *> *)fetchResultsWithLimit:(NSInteger)limit {
+    if (limit <= 0 || g_results.empty()) return @[];
+
+    const NSInteger count = MIN((NSInteger)g_results.size(), limit);
+    NSMutableArray<NSDictionary *> *results = [NSMutableArray arrayWithCapacity:(NSUInteger)count];
+    for (NSInteger i = 0; i < count; i++) {
+        const MSScanMatch &match = g_results[(size_t)i];
+        [results addObject:@{
+            @"address": @(match.address),
+            @"value": @(match.value)
+        }];
+    }
+    return results;
+}
+
 @end
