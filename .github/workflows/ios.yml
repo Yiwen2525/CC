@@ -27,7 +27,6 @@ jobs:
             echo "Found project at MemScan.xcodeproj"
           else
             echo "ERROR: MemScan.xcodeproj not found"
-            echo "Please upload the MemScan folder to the repo root."
             ls -la
             exit 1
           fi
@@ -40,6 +39,7 @@ jobs:
       - name: Build for device (unsigned)
         working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
+          set -o pipefail
           xcodebuild \
             -project MemScan.xcodeproj \
             -scheme MemScan \
@@ -50,6 +50,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log
+          exit ${PIPESTATUS[0]}
 
       - name: Package .app bundle
         working-directory: ${{ steps.locate.outputs.project_dir }}
