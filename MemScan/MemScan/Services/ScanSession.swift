@@ -1,7 +1,7 @@
 import Foundation
 
 enum ScanError: LocalizedError {
-    case attachFailed
+    case attachFailed(String)
     case scanFailed(String)
     case noResults
     case writeFailed(String)
@@ -9,8 +9,8 @@ enum ScanError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .attachFailed:
-            return "无法附加到目标进程"
+        case .attachFailed(let message):
+            return message
         case .scanFailed(let message):
             return message
         case .noResults:
@@ -122,42 +122,44 @@ final class ScanSession: ObservableObject {
             refreshDisplayedResults()
         } catch {
             errorMessage = error.localizedDescription
+            refreshDisplayedResults()
+            if results.isEmpty {
+                hasScanned = false
+            }
         }
 
         isScanning = false
     }
 
     private func runFirstScan(value: Double) throws {
-        do {
-            let count = try MemScanBridge.runFirstScan(
-                withValue: value,
-                dataType: dataType.bridgeType,
-                regionFilter: searchScope.bridgeFilter
-            )
-            if count == 0 {
-                throw ScanError.noResults
-            }
-        } catch let scanError as ScanError {
-            throw scanError
-        } catch {
+        var error: NSError?
+        let count = MemScanBridge.runFirstScan(
+            withValue: value,
+            dataType: dataType.bridgeType,
+            regionFilter: searchScope.bridgeFilter,
+            error: &error
+        )
+        if let error {
             throw ScanError.scanFailed(error.localizedDescription)
+        }
+        if count == 0 {
+            throw ScanError.noResults
         }
     }
 
     private func runRefineScan(value: Double) throws {
-        do {
-            let count = try MemScanBridge.runRefineScan(
-                withValue: value,
-                mode: refineMode.bridgeMode,
-                dataType: dataType.bridgeType
-            )
-            if count == 0 {
-                throw ScanError.noResults
-            }
-        } catch let scanError as ScanError {
-            throw scanError
-        } catch {
+        var error: NSError?
+        let count = MemScanBridge.runRefineScan(
+            withValue: value,
+            mode: refineMode.bridgeMode,
+            dataType: dataType.bridgeType,
+            error: &error
+        )
+        if let error {
             throw ScanError.scanFailed(error.localizedDescription)
+        }
+        if count == 0 {
+            throw ScanError.noResults
         }
     }
 

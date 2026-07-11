@@ -26,7 +26,7 @@ final class ProcessService {
         do {
             try MemScanBridge.attach(toPID: process.pid)
         } catch {
-            throw ScanError.attachFailed
+            throw ScanError.attachFailed(error.localizedDescription)
         }
     }
 
