@@ -24,7 +24,7 @@ final class ProcessService {
 
     func attach(to process: ProcessInfo) throws {
         var error: NSError?
-        let ok = MemScanBridge.attachToPID(process.pid, error: &error)
+        let ok = MemScanBridge.attachToPID(process.pid)
         if !ok {
             throw error ?? ScanError.attachFailed
         }
