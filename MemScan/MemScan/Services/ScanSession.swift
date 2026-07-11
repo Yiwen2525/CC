@@ -88,7 +88,7 @@ final class ScanSession: ObservableObject {
             newValue,
             dataType: dataType.bridgeType,
             address: result.address,
-            error: &error
+            error
         )
         if !ok {
             throw error.map { ScanError.writeFailed($0.localizedDescription) } ?? ScanError.writeFailed("写入失败")
