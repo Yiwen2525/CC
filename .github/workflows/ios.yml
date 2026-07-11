@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Locate Xcode project
         id: locate
@@ -27,7 +27,6 @@ jobs:
             echo "Found project at MemScan.xcodeproj"
           else
             echo "ERROR: MemScan.xcodeproj not found"
-            echo "Please upload the MemScan folder to the repo root."
             ls -la
             exit 1
           fi
@@ -40,6 +39,7 @@ jobs:
       - name: Build for device (unsigned)
         working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
+          set -o pipefail
           xcodebuild \
             -project MemScan.xcodeproj \
             -scheme MemScan \
@@ -49,7 +49,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            ASSETCATALOG_COMPILER_APPICON_NAME="" \
             build 2>&1 | tee build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          if [ "$BUILD_STATUS" -ne 0 ]; then
+            echo "==== BUILD ERRORS ===="
+            grep -E "error:|fatal error:" build.log || tail -100 build.log
+            exit "$BUILD_STATUS"
+          fi
 
       - name: Package .app bundle
         working-directory: ${{ steps.locate.outputs.project_dir }}
