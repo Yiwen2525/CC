@@ -81,7 +81,7 @@ private struct PermissionBanner: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
-            Text(MemScanBridge.memoryAccessErrorMessage() ?? "无法访问进程内存")
+            Text(MemScanBridge.memoryAccessErrorMessage())
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

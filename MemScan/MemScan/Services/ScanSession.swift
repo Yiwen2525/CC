@@ -83,15 +83,14 @@ final class ScanSession: ObservableObject {
             throw ScanError.writeFailed("无效数值")
         }
 
-        var error: NSError?
-        let ok = MemScanBridge.writeValue(
-            newValue,
-            dataType: dataType.bridgeType,
-            address: result.address,
-            error: &error
-        )
-        if !ok {
-            throw error.map { ScanError.writeFailed($0.localizedDescription) } ?? ScanError.writeFailed("写入失败")
+        do {
+            try MemScanBridge.writeValue(
+                newValue,
+                dataType: dataType.bridgeType,
+                address: result.address
+            )
+        } catch {
+            throw ScanError.writeFailed(error.localizedDescription)
         }
 
         if let index = results.firstIndex(of: result) {
@@ -129,38 +128,36 @@ final class ScanSession: ObservableObject {
     }
 
     private func runFirstScan(value: Double) throws {
-        var error: NSError?
-        MemScanBridge.runFirstScan(
-            withValue: value,
-            dataType: dataType.bridgeType,
-            regionFilter: searchScope.bridgeFilter,
-            error: &error
-        )
-
-        if let error {
+        do {
+            let count = try MemScanBridge.runFirstScan(
+                withValue: value,
+                dataType: dataType.bridgeType,
+                regionFilter: searchScope.bridgeFilter
+            )
+            if count == 0 {
+                throw ScanError.noResults
+            }
+        } catch let scanError as ScanError {
+            throw scanError
+        } catch {
             throw ScanError.scanFailed(error.localizedDescription)
-        }
-
-        if MemScanBridge.storedResultCount() == 0 {
-            throw ScanError.noResults
         }
     }
 
     private func runRefineScan(value: Double) throws {
-        var error: NSError?
-        MemScanBridge.runRefineScan(
-            withValue: value,
-            mode: refineMode.bridgeMode,
-            dataType: dataType.bridgeType,
-            error: &error
-        )
-
-        if let error {
+        do {
+            let count = try MemScanBridge.runRefineScan(
+                withValue: value,
+                mode: refineMode.bridgeMode,
+                dataType: dataType.bridgeType
+            )
+            if count == 0 {
+                throw ScanError.noResults
+            }
+        } catch let scanError as ScanError {
+            throw scanError
+        } catch {
             throw ScanError.scanFailed(error.localizedDescription)
-        }
-
-        if MemScanBridge.storedResultCount() == 0 {
-            throw ScanError.noResults
         }
     }
 
