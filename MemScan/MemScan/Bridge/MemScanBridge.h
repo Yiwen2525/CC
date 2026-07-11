@@ -46,7 +46,7 @@ typedef NS_ENUM(NSInteger, MSRefineMode) {
 @interface MemScanBridge : NSObject
 
 + (BOOL)isMemoryAccessAvailable;
-+ (nullable NSString *)memoryAccessErrorMessage;
++ (NSString *)memoryAccessErrorMessage;
 
 + (NSInteger)listProcesses:(MSProcessInfo *)buffer capacity:(NSInteger)capacity;
 + (BOOL)attachToPID:(int32_t)pid error:(NSError **)error;

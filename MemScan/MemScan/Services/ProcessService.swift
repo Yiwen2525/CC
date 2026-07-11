@@ -6,23 +6,22 @@ final class ProcessService {
 
     func fetchProcesses() -> [ProcessInfo] {
         let capacity = 2048
-        let buffer = UnsafeMutablePointer<MSProcessInfo>.allocate(capacity: capacity)
-        defer { buffer.deallocate() }
+        return BridgeBuffer.withProcessBuffer(capacity) { buffer, capacity in
+            let count = MemScanBridge.listProcesses(buffer, capacity: capacity)
+            guard count > 0 else { return [] }
 
-        let count = MemScanBridge.listProcesses(buffer, capacity: capacity)
-        guard count > 0 else { return [] }
-
-        return (0..<count).map { index in
-            let item = buffer[index]
-            let name = String(cString: item.name)
-            let bundleID = String(cString: item.bundle_id)
-            return ProcessInfo(
-                pid: item.pid,
-                name: name,
-                bundleID: bundleID.isEmpty ? nil : bundleID
-            )
+            return (0..<count).map { index in
+                let item = buffer[index]
+                let name = String(cString: item.name)
+                let bundleID = String(cString: item.bundle_id)
+                return ProcessInfo(
+                    pid: item.pid,
+                    name: name,
+                    bundleID: bundleID.isEmpty ? nil : bundleID
+                )
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
-        .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     func attach(to process: ProcessInfo) throws {
