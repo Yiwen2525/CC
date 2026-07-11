@@ -184,7 +184,7 @@ final class ScanSession: ObservableObject {
         let buffer = UnsafeMutablePointer<MSScanMatch>.allocate(capacity: capacity)
         defer { buffer.deallocate() }
 
-        let count = MemScanBridge.copyResults(to: buffer, capacity: capacity)
+        let count = MemScanBridge.copyResultsTo(buffer, capacity: capacity)
         return (0..<count).map { index in
             let item = buffer[index]
             return ScanResult(address: item.address, value: item.value)
