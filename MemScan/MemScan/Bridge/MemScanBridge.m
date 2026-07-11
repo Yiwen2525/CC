@@ -1,19 +1,11 @@
 #import "MemScanBridge.h"
 
-#import <mach/mach.h>
-#import <mach/vm_map.h>
-#import <mach/vm_region.h>
-#import <mach/vm_statistics.h>
-#import <sys/sysctl.h>
-#import <sys/proc.h>
-#import <unistd.h>
-#import <vector>
-#import <cmath>
-#import <cstring>
+@import Darwin;
 
 static task_t g_task = MACH_PORT_NULL;
-static std::vector<MSScanMatch> g_results;
-static MSDataType g_currentDataType = MSDataTypeInt32;
+static MSScanMatch *g_results = NULL;
+static size_t g_resultCount = 0;
+static size_t g_resultCapacity = 0;
 
 static NSError *MSError(NSString *message, NSInteger code) {
     return [NSError errorWithDomain:@"MemScan" code:code userInfo:@{NSLocalizedDescriptionKey: message}];
@@ -35,7 +27,7 @@ static int DataTypeSize(MSDataType type) {
     return 4;
 }
 
-static bool IsFloating(MSDataType type) {
+static BOOL IsFloating(MSDataType type) {
     return type == MSDataTypeFloat || type == MSDataTypeDouble;
 }
 
@@ -55,33 +47,33 @@ static double ReadTypedValue(const uint8_t *bytes, MSDataType type) {
     return 0;
 }
 
-static bool WriteTypedValue(uint8_t *bytes, MSDataType type, double value) {
+static BOOL WriteTypedValue(uint8_t *bytes, MSDataType type, double value) {
     switch (type) {
-        case MSDataTypeInt8: *(int8_t *)bytes = (int8_t)llround(value); return true;
-        case MSDataTypeInt16: *(int16_t *)bytes = (int16_t)llround(value); return true;
-        case MSDataTypeInt32: *(int32_t *)bytes = (int32_t)llround(value); return true;
-        case MSDataTypeInt64: *(int64_t *)bytes = (int64_t)llround(value); return true;
-        case MSDataTypeUInt8: *(uint8_t *)bytes = (uint8_t)llround(fmax(0, value)); return true;
-        case MSDataTypeUInt16: *(uint16_t *)bytes = (uint16_t)llround(fmax(0, value)); return true;
-        case MSDataTypeUInt32: *(uint32_t *)bytes = (uint32_t)llround(fmax(0, value)); return true;
-        case MSDataTypeUInt64: *(uint64_t *)bytes = (uint64_t)llround(fmax(0, value)); return true;
-        case MSDataTypeFloat: *(float *)bytes = (float)value; return true;
-        case MSDataTypeDouble: *(double *)bytes = value; return true;
+        case MSDataTypeInt8: *(int8_t *)bytes = (int8_t)llround(value); return YES;
+        case MSDataTypeInt16: *(int16_t *)bytes = (int16_t)llround(value); return YES;
+        case MSDataTypeInt32: *(int32_t *)bytes = (int32_t)llround(value); return YES;
+        case MSDataTypeInt64: *(int64_t *)bytes = (int64_t)llround(value); return YES;
+        case MSDataTypeUInt8: *(uint8_t *)bytes = (uint8_t)llround(fmax(0, value)); return YES;
+        case MSDataTypeUInt16: *(uint16_t *)bytes = (uint16_t)llround(fmax(0, value)); return YES;
+        case MSDataTypeUInt32: *(uint32_t *)bytes = (uint32_t)llround(fmax(0, value)); return YES;
+        case MSDataTypeUInt64: *(uint64_t *)bytes = (uint64_t)llround(fmax(0, value)); return YES;
+        case MSDataTypeFloat: *(float *)bytes = (float)value; return YES;
+        case MSDataTypeDouble: *(double *)bytes = value; return YES;
     }
-    return false;
+    return NO;
 }
 
-static bool ValuesEqual(double a, double b, MSDataType type) {
+static BOOL ValuesEqual(double a, double b, MSDataType type) {
     if (IsFloating(type)) {
-        const double epsilon = (type == MSDataTypeFloat) ? 1e-5 : 1e-9;
+        double epsilon = (type == MSDataTypeFloat) ? 1e-5 : 1e-9;
         return fabs(a - b) <= epsilon;
     }
     return llround(a) == llround(b);
 }
 
-static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRegionFilter filter) {
-    const bool readable = (protection & VM_PROT_READ) != 0;
-    if (!readable) return false;
+static BOOL RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRegionFilter filter) {
+    BOOL readable = (protection & VM_PROT_READ) != 0;
+    if (!readable) return NO;
 
     switch (filter) {
         case MSRegionFilterAll:
@@ -100,7 +92,32 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         case MSRegionFilterExecutable:
             return (protection & VM_PROT_EXECUTE) != 0;
     }
-    return true;
+    return YES;
+}
+
+static void ResultsClear(void) {
+    free(g_results);
+    g_results = NULL;
+    g_resultCount = 0;
+    g_resultCapacity = 0;
+}
+
+static void ResultsAppend(MSScanMatch match) {
+    if (g_resultCount >= g_resultCapacity) {
+        size_t newCapacity = g_resultCapacity == 0 ? 256 : g_resultCapacity * 2;
+        MSScanMatch *newBuffer = (MSScanMatch *)realloc(g_results, newCapacity * sizeof(MSScanMatch));
+        if (!newBuffer) return;
+        g_results = newBuffer;
+        g_resultCapacity = newCapacity;
+    }
+    g_results[g_resultCount++] = match;
+}
+
+static void ResultsReplace(MSScanMatch *items, size_t count) {
+    free(g_results);
+    g_results = items;
+    g_resultCount = count;
+    g_resultCapacity = count;
 }
 
 @implementation MemScanBridge
@@ -124,34 +141,39 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
 
     int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
     size_t length = 0;
-    if (sysctl(mib, 4, nullptr, &length, nullptr, 0) != 0 || length == 0) {
+    if (sysctl(mib, 4, NULL, &length, NULL, 0) != 0 || length == 0) {
         return 0;
     }
 
-    std::vector<uint8_t> procBuffer(length);
-    if (sysctl(mib, 4, procBuffer.data(), &length, nullptr, 0) != 0) {
+    uint8_t *procBuffer = (uint8_t *)malloc(length);
+    if (!procBuffer) return 0;
+
+    if (sysctl(mib, 4, procBuffer, &length, NULL, 0) != 0) {
+        free(procBuffer);
         return 0;
     }
 
-    const struct kinfo_proc *procs = reinterpret_cast<const struct kinfo_proc *>(procBuffer.data());
-    const size_t count = length / sizeof(struct kinfo_proc);
+    const struct kinfo_proc *procs = (const struct kinfo_proc *)procBuffer;
+    size_t count = length / sizeof(struct kinfo_proc);
     NSInteger written = 0;
 
     for (size_t i = 0; i < count && written < capacity; i++) {
-        const struct kinfo_proc &proc = procs[i];
-        const pid_t pid = proc.kp_proc.p_pid;
+        const struct kinfo_proc *proc = &procs[i];
+        pid_t pid = proc->kp_proc.p_pid;
         if (pid <= 0) continue;
 
-        const char *name = proc.kp_proc.p_comm;
+        const char *name = proc->kp_proc.p_comm;
         if (!name || name[0] == '\0') continue;
 
-        MSProcessInfo info = {};
+        MSProcessInfo info;
+        memset(&info, 0, sizeof(info));
         info.pid = pid;
         strncpy(info.name, name, sizeof(info.name) - 1);
         strncpy(info.bundle_id, "", sizeof(info.bundle_id) - 1);
         buffer[written++] = info;
     }
 
+    free(procBuffer);
     return written;
 }
 
@@ -166,7 +188,7 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         return NO;
     }
 
-    g_results.clear();
+    ResultsClear();
     return YES;
 }
 
@@ -175,39 +197,38 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         mach_port_deallocate(mach_task_self(), g_task);
         g_task = MACH_PORT_NULL;
     }
-    g_results.clear();
+    ResultsClear();
 }
 
 + (NSInteger)firstScanWithValue:(double)value
-                      dataType:(MSDataType)dataType
-                  regionFilter:(MSRegionFilter)regionFilter
-                         matches:(MSScanMatch *)buffer
-                        capacity:(NSInteger)capacity
-                            error:(NSError **)error {
+                       dataType:(MSDataType)dataType
+                   regionFilter:(MSRegionFilter)regionFilter
+                        matches:(MSScanMatch *)buffer
+                       capacity:(NSInteger)capacity
+                           error:(NSError **)error {
     if (g_task == MACH_PORT_NULL) {
         if (error) *error = MSError(@"未附加到目标进程", 1);
         return 0;
     }
 
-    g_currentDataType = dataType;
-    g_results.clear();
+    ResultsClear();
 
-    const int typeSize = DataTypeSize(dataType);
+    int typeSize = DataTypeSize(dataType);
     mach_vm_address_t address = 0;
     mach_vm_size_t regionSize = 0;
     natural_t depth = 0;
 
-    while (true) {
-        struct vm_region_submap_info_64 info = {};
-        mach_msg_type_number_t count = VM_REGION_SUBMAP_INFO_COUNT_64;
+    while (1) {
+        struct vm_region_submap_info_64 info;
+        memset(&info, 0, sizeof(info));
+        mach_msg_type_number_t infoCount = VM_REGION_SUBMAP_INFO_COUNT_64;
         kern_return_t kr = mach_vm_region_recurse(g_task, &address, &regionSize, &depth,
-                                                  (vm_region_recurse_info_t)&info, &count);
+                                                  (vm_region_recurse_info_t)&info, &infoCount);
 
         if (kr == KERN_INVALID_ADDRESS) break;
         if (kr != KERN_SUCCESS) break;
 
-        const bool isSubmap = info.is_submap;
-        if (isSubmap) {
+        if (info.is_submap) {
             depth++;
             continue;
         }
@@ -222,25 +243,32 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
             continue;
         }
 
-        std::vector<uint8_t> chunk(regionSize);
-        mach_vm_size_t bytesRead = 0;
-        kr = mach_vm_read_overwrite(g_task, address, regionSize, (mach_vm_address_t)chunk.data(), &bytesRead);
-        if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
+        uint8_t *chunk = (uint8_t *)malloc((size_t)regionSize);
+        if (!chunk) {
             address += regionSize;
             continue;
         }
 
-        const size_t limit = bytesRead - typeSize;
-        for (size_t offset = 0; offset <= limit; offset += typeSize) {
-            const double current = ReadTypedValue(chunk.data() + offset, dataType);
+        mach_vm_size_t bytesRead = 0;
+        kr = mach_vm_read_overwrite(g_task, address, regionSize, (mach_vm_address_t)chunk, &bytesRead);
+        if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
+            free(chunk);
+            address += regionSize;
+            continue;
+        }
+
+        size_t limit = (size_t)bytesRead - (size_t)typeSize;
+        for (size_t offset = 0; offset <= limit; offset += (size_t)typeSize) {
+            double current = ReadTypedValue(chunk + offset, dataType);
             if (ValuesEqual(current, value, dataType)) {
-                MSScanMatch match = {};
+                MSScanMatch match;
                 match.address = address + offset;
                 match.value = current;
-                g_results.push_back(match);
+                ResultsAppend(match);
             }
         }
 
+        free(chunk);
         address += regionSize;
     }
 
@@ -257,26 +285,33 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         if (error) *error = MSError(@"未附加到目标进程", 1);
         return 0;
     }
-    if (g_results.empty()) {
+    if (g_resultCount == 0) {
         if (error) *error = MSError(@"没有可精搜的结果，请先进行首次搜索", 2);
         return 0;
     }
 
-    const int typeSize = DataTypeSize(dataType);
-    std::vector<MSScanMatch> refined;
-    refined.reserve(g_results.size());
+    int typeSize = DataTypeSize(dataType);
+    size_t refinedCapacity = g_resultCount;
+    MSScanMatch *refined = (MSScanMatch *)malloc(refinedCapacity * sizeof(MSScanMatch));
+    if (!refined) {
+        if (error) *error = MSError(@"内存不足", 5);
+        return 0;
+    }
 
-    for (const MSScanMatch &old : g_results) {
-        uint8_t bytes[8] = {0};
+    size_t refinedCount = 0;
+    for (size_t i = 0; i < g_resultCount; i++) {
+        MSScanMatch old = g_results[i];
+        uint8_t bytes[8];
+        memset(bytes, 0, sizeof(bytes));
         mach_vm_size_t bytesRead = 0;
-        kern_return_t kr = mach_vm_read_overwrite(g_task, old.address, typeSize,
+        kern_return_t kr = mach_vm_read_overwrite(g_task, old.address, (mach_vm_size_t)typeSize,
                                                   (mach_vm_address_t)bytes, &bytesRead);
         if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
             continue;
         }
 
-        const double current = ReadTypedValue(bytes, dataType);
-        bool keep = false;
+        double current = ReadTypedValue(bytes, dataType);
+        BOOL keep = NO;
 
         switch (mode) {
             case MSRefineModeExact:
@@ -297,15 +332,13 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         }
 
         if (keep) {
-            MSScanMatch match = {};
-            match.address = old.address;
-            match.value = current;
-            refined.push_back(match);
+            refined[refinedCount].address = old.address;
+            refined[refinedCount].value = current;
+            refinedCount++;
         }
     }
 
-    g_results = std::move(refined);
-    g_currentDataType = dataType;
+    ResultsReplace(refined, refinedCount);
     return [self copyResultsTo:buffer capacity:capacity];
 }
 
@@ -318,8 +351,9 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         return NO;
     }
 
-    const int typeSize = DataTypeSize(dataType);
-    uint8_t bytes[8] = {0};
+    int typeSize = DataTypeSize(dataType);
+    uint8_t bytes[8];
+    memset(bytes, 0, sizeof(bytes));
     if (!WriteTypedValue(bytes, dataType, value)) {
         if (error) *error = MSError(@"无效的数据类型", 3);
         return NO;
@@ -333,9 +367,9 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
         return NO;
     }
 
-    for (auto &item : g_results) {
-        if (item.address == address) {
-            item.value = value;
+    for (size_t i = 0; i < g_resultCount; i++) {
+        if (g_results[i].address == address) {
+            g_results[i].value = value;
             break;
         }
     }
@@ -352,10 +386,11 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
     }
     if (!outValue) return NO;
 
-    const int typeSize = DataTypeSize(dataType);
-    uint8_t bytes[8] = {0};
+    int typeSize = DataTypeSize(dataType);
+    uint8_t bytes[8];
+    memset(bytes, 0, sizeof(bytes));
     mach_vm_size_t bytesRead = 0;
-    kern_return_t kr = mach_vm_read_overwrite(g_task, address, typeSize,
+    kern_return_t kr = mach_vm_read_overwrite(g_task, address, (mach_vm_size_t)typeSize,
                                               (mach_vm_address_t)bytes, &bytesRead);
     if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
         if (error) *error = MSError(@"读取内存失败", 4);
@@ -367,32 +402,37 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
 }
 
 + (NSInteger)storedResultCount {
-    return (NSInteger)g_results.size();
+    return (NSInteger)g_resultCount;
 }
 
 + (void)clearResults {
-    g_results.clear();
+    ResultsClear();
 }
 
 + (NSInteger)copyResultsTo:(MSScanMatch *)buffer capacity:(NSInteger)capacity {
-    if (!buffer || capacity <= 0) return (NSInteger)g_results.size();
+    if (!buffer || capacity <= 0) return (NSInteger)g_resultCount;
 
-    const NSInteger count = MIN((NSInteger)g_results.size(), capacity);
+    NSInteger count = MIN((NSInteger)g_resultCount, capacity);
     for (NSInteger i = 0; i < count; i++) {
         buffer[i] = g_results[(size_t)i];
     }
     return count;
 }
 
-+ (NSArray<NSDictionary *> *)fetchProcessList {
-    const NSInteger capacity = 2048;
-    std::vector<MSProcessInfo> buffer((size_t)capacity);
-    const NSInteger count = [self listProcesses:buffer.data() capacity:capacity];
-    if (count <= 0) return @[];
++ (NSArray *)fetchProcessList {
+    NSInteger capacity = 2048;
+    MSProcessInfo *buffer = (MSProcessInfo *)calloc((size_t)capacity, sizeof(MSProcessInfo));
+    if (!buffer) return @[];
 
-    NSMutableArray<NSDictionary *> *results = [NSMutableArray arrayWithCapacity:(NSUInteger)count];
+    NSInteger count = [self listProcesses:buffer capacity:capacity];
+    if (count <= 0) {
+        free(buffer);
+        return @[];
+    }
+
+    NSMutableArray *results = [NSMutableArray arrayWithCapacity:(NSUInteger)count];
     for (NSInteger i = 0; i < count; i++) {
-        const MSProcessInfo &info = buffer[(size_t)i];
+        MSProcessInfo info = buffer[i];
         NSString *name = [NSString stringWithUTF8String:info.name] ?: @"";
         NSString *bundleID = [NSString stringWithUTF8String:info.bundle_id] ?: @"";
         [results addObject:@{
@@ -401,6 +441,8 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
             @"bundleID": bundleID
         }];
     }
+
+    free(buffer);
     return results;
 }
 
@@ -428,13 +470,13 @@ static bool RegionMatchesFilter(unsigned int userTag, vm_prot_t protection, MSRe
                                 error:error];
 }
 
-+ (NSArray<NSDictionary *> *)fetchResultsWithLimit:(NSInteger)limit {
-    if (limit <= 0 || g_results.empty()) return @[];
++ (NSArray *)fetchResultsWithLimit:(NSInteger)limit {
+    if (limit <= 0 || g_resultCount == 0) return @[];
 
-    const NSInteger count = MIN((NSInteger)g_results.size(), limit);
-    NSMutableArray<NSDictionary *> *results = [NSMutableArray arrayWithCapacity:(NSUInteger)count];
+    NSInteger count = MIN((NSInteger)g_resultCount, limit);
+    NSMutableArray *results = [NSMutableArray arrayWithCapacity:(NSUInteger)count];
     for (NSInteger i = 0; i < count; i++) {
-        const MSScanMatch &match = g_results[(size_t)i];
+        MSScanMatch match = g_results[(size_t)i];
         [results addObject:@{
             @"address": @(match.address),
             @"value": @(match.value)

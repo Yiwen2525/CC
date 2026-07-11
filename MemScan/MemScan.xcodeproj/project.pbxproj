@@ -17,7 +17,7 @@
 		A10000010000000000000008 /* ProcessListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000008 /* ProcessListView.swift */; };
 		A10000010000000000000009 /* ScanWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000009 /* ScanWorkspaceView.swift */; };
 		A1000001000000000000000A /* ModifyValueSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000000A /* ModifyValueSheet.swift */; };
-		A1000001000000000000000B /* MemScanBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000000B /* MemScanBridge.mm */; };
+		A1000001000000000000000B /* MemScanBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000000B /* MemScanBridge.m */; };
 		A1000001000000000000000C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000002000000000000000C /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -32,7 +32,7 @@
 		A10000020000000000000008 /* ProcessListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessListView.swift; sourceTree = "<group>"; };
 		A10000020000000000000009 /* ScanWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanWorkspaceView.swift; sourceTree = "<group>"; };
 		A1000002000000000000000A /* ModifyValueSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModifyValueSheet.swift; sourceTree = "<group>"; };
-		A1000002000000000000000B /* MemScanBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = MemScanBridge.mm; sourceTree = "<group>"; };
+		A1000002000000000000000B /* MemScanBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MemScanBridge.m; sourceTree = "<group>"; };
 		A1000002000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000002000000000000000D /* MemScanBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MemScanBridge.h; sourceTree = "<group>"; };
 		A1000002000000000000000E /* MemScan-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MemScan-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -118,7 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000002000000000000000D /* MemScanBridge.h */,
-				A1000002000000000000000B /* MemScanBridge.mm */,
+				A1000002000000000000000B /* MemScanBridge.m */,
 			);
 			path = Bridge;
 			sourceTree = "<group>";
@@ -203,7 +203,7 @@
 				A10000010000000000000008 /* ProcessListView.swift in Sources */,
 				A10000010000000000000009 /* ScanWorkspaceView.swift in Sources */,
 				A1000001000000000000000A /* ModifyValueSheet.swift in Sources */,
-				A1000001000000000000000B /* MemScanBridge.mm in Sources */,
+				A1000001000000000000000B /* MemScanBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,4 +1,5 @@
-#import <Foundation/Foundation.h>
+@import Foundation;
+@import Darwin;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -48,7 +49,7 @@ typedef NS_ENUM(NSInteger, MSRefineMode) {
 + (BOOL)isMemoryAccessAvailable;
 + (NSString *)memoryAccessErrorMessage;
 
-+ (NSArray<NSDictionary *> *)fetchProcessList;
++ (NSArray *)fetchProcessList;
 
 + (NSInteger)runFirstScanWithValue:(double)value
                           dataType:(MSDataType)dataType
@@ -60,23 +61,23 @@ typedef NS_ENUM(NSInteger, MSRefineMode) {
                            dataType:(MSDataType)dataType
                               error:(NSError **)error;
 
-+ (NSArray<NSDictionary *> *)fetchResultsWithLimit:(NSInteger)limit;
++ (NSArray *)fetchResultsWithLimit:(NSInteger)limit;
 
 + (NSInteger)listProcesses:(MSProcessInfo *)buffer capacity:(NSInteger)capacity;
 + (BOOL)attachToPID:(int32_t)pid error:(NSError **)error;
 + (void)detach;
 
 + (NSInteger)firstScanWithValue:(double)value
-                      dataType:(MSDataType)dataType
-                  regionFilter:(MSRegionFilter)regionFilter
-                         matches:(MSScanMatch *)buffer
-                        capacity:(NSInteger)capacity
-                            error:(NSError **)error;
+                       dataType:(MSDataType)dataType
+                   regionFilter:(MSRegionFilter)regionFilter
+                        matches:(MSScanMatch * _Nullable)buffer
+                       capacity:(NSInteger)capacity
+                           error:(NSError **)error;
 
 + (NSInteger)refineScanWithValue:(double)value
                             mode:(MSRefineMode)mode
                         dataType:(MSDataType)dataType
-                         matches:(MSScanMatch *)buffer
+                         matches:(MSScanMatch * _Nullable)buffer
                         capacity:(NSInteger)capacity
                             error:(NSError **)error;
 
