@@ -199,10 +199,10 @@ private extension DataType {
         case .int16: return .int16
         case .int32: return .int32
         case .int64: return .int64
-        case .uint8: return .uint8
-        case .uint16: return .uint16
-        case .uint32: return .uint32
-        case .uint64: return .uint64
+        case .uint8: return .uInt8
+        case .uint16: return .uInt16
+        case .uint32: return .uInt32
+        case .uint64: return .uInt64
         case .float: return .float
         case .double: return .double
         }
