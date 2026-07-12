@@ -1,5 +1,6 @@
 #import "MemScanBridge.h"
-
+#import <mach/mach_vm.h>
+#import <sys/sysctl.h>
 @import Darwin;
 
 static task_t g_task = MACH_PORT_NULL;
