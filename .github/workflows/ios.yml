@@ -104,6 +104,17 @@ jobs:
           echo "App bundle contents:"
           ls -la "$APP_PATH"
           file "$APP_PATH/MemScan"
+          ENTITLEMENTS="MemScan/MemScan.entitlements"
+          if [ ! -f "$ENTITLEMENTS" ]; then
+            echo "ERROR: entitlements file missing at $ENTITLEMENTS"
+            exit 1
+          fi
+          if ! command -v ldid >/dev/null 2>&1; then
+            brew install ldid
+          fi
+          ldid -S"$ENTITLEMENTS" "$APP_PATH/MemScan"
+          echo "Applied entitlements:"
+          ldid -e "$APP_PATH/MemScan" || true
           rm -rf build/Payload build/MemScan-unsigned.ipa
           mkdir -p build/Payload
           cp -R "$APP_PATH" build/Payload/
