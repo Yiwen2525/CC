@@ -1,7 +1,8 @@
 #import "MemScanBridge.h"
-#import <mach/mach_vm.h>
-#import <sys/sysctl.h>
+
 @import Darwin;
+#import <mach/vm_map.h>
+#import <sys/sysctl.h>
 
 static task_t g_task = MACH_PORT_NULL;
 static MSScanMatch *g_results = NULL;
@@ -215,16 +216,16 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
     ResultsClear();
 
     int typeSize = DataTypeSize(dataType);
-    mach_vm_address_t address = 0;
-    mach_vm_size_t regionSize = 0;
+    vm_address_t address = 0;
+    vm_size_t regionSize = 0;
     natural_t depth = 0;
 
     while (1) {
         struct vm_region_submap_info_64 info;
         memset(&info, 0, sizeof(info));
         mach_msg_type_number_t infoCount = VM_REGION_SUBMAP_INFO_COUNT_64;
-        kern_return_t kr = mach_vm_region_recurse(g_task, &address, &regionSize, &depth,
-                                                  (vm_region_recurse_info_t)&info, &infoCount);
+        kern_return_t kr = vm_region_recurse(g_task, &address, &regionSize, &depth,
+                                             (vm_region_recurse_info_t)&info, &infoCount);
 
         if (kr == KERN_INVALID_ADDRESS) break;
         if (kr != KERN_SUCCESS) break;
@@ -239,7 +240,7 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
             continue;
         }
 
-        if (regionSize < (mach_vm_size_t)typeSize) {
+        if (regionSize < (vm_size_t)typeSize) {
             address += regionSize;
             continue;
         }
@@ -250,9 +251,9 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
             continue;
         }
 
-        mach_vm_size_t bytesRead = 0;
-        kr = mach_vm_read_overwrite(g_task, address, regionSize, (mach_vm_address_t)chunk, &bytesRead);
-        if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
+        vm_size_t bytesRead = 0;
+        kr = vm_read_overwrite(g_task, address, regionSize, (vm_address_t)chunk, &bytesRead);
+        if (kr != KERN_SUCCESS || bytesRead < (vm_size_t)typeSize) {
             free(chunk);
             address += regionSize;
             continue;
@@ -304,10 +305,10 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
         MSScanMatch old = g_results[i];
         uint8_t bytes[8];
         memset(bytes, 0, sizeof(bytes));
-        mach_vm_size_t bytesRead = 0;
-        kern_return_t kr = mach_vm_read_overwrite(g_task, old.address, (mach_vm_size_t)typeSize,
-                                                  (mach_vm_address_t)bytes, &bytesRead);
-        if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
+        vm_size_t bytesRead = 0;
+        kern_return_t kr = vm_read_overwrite(g_task, (vm_address_t)old.address, (vm_size_t)typeSize,
+                                               (vm_address_t)bytes, &bytesRead);
+        if (kr != KERN_SUCCESS || bytesRead < (vm_size_t)typeSize) {
             continue;
         }
 
@@ -360,7 +361,7 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
         return NO;
     }
 
-    kern_return_t kr = mach_vm_write(g_task, address, (vm_offset_t)bytes, (mach_msg_type_number_t)typeSize);
+    kern_return_t kr = vm_write(g_task, (vm_address_t)address, (vm_offset_t)bytes, (mach_msg_type_number_t)typeSize);
     if (kr != KERN_SUCCESS) {
         if (error) {
             *error = MSError([NSString stringWithFormat:@"写入内存失败 (kr=%d)", kr], kr);
@@ -390,10 +391,10 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
     int typeSize = DataTypeSize(dataType);
     uint8_t bytes[8];
     memset(bytes, 0, sizeof(bytes));
-    mach_vm_size_t bytesRead = 0;
-    kern_return_t kr = mach_vm_read_overwrite(g_task, address, (mach_vm_size_t)typeSize,
-                                              (mach_vm_address_t)bytes, &bytesRead);
-    if (kr != KERN_SUCCESS || bytesRead < (mach_vm_size_t)typeSize) {
+    vm_size_t bytesRead = 0;
+    kern_return_t kr = vm_read_overwrite(g_task, (vm_address_t)address, (vm_size_t)typeSize,
+                                           (vm_address_t)bytes, &bytesRead);
+    if (kr != KERN_SUCCESS || bytesRead < (vm_size_t)typeSize) {
         if (error) *error = MSError(@"读取内存失败", 4);
         return NO;
     }
