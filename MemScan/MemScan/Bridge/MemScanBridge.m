@@ -218,22 +218,22 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
     int typeSize = DataTypeSize(dataType);
     vm_address_t address = 0;
     vm_size_t regionSize = 0;
-    natural_t depth = 0;
+    mach_port_t objectName = MACH_PORT_NULL;
 
     while (1) {
-        struct vm_region_submap_info_64 info;
-        memset(&info, 0, sizeof(info));
-        mach_msg_type_number_t infoCount = VM_REGION_SUBMAP_INFO_COUNT_64;
-        kern_return_t kr = vm_region_recurse(g_task, &address, &regionSize, &depth,
-                                             (vm_region_recurse_info_t)&info, &infoCount);
+        struct vm_region_basic_info_64 info;
+        mach_msg_type_number_t infoCount = VM_REGION_BASIC_INFO_COUNT_64;
+        kern_return_t kr = vm_region_64(
+            g_task,
+            &address,
+            &regionSize,
+            VM_REGION_BASIC_INFO_64,
+            (vm_region_info_t)&info,
+            &infoCount,
+            &objectName
+        );
 
-        if (kr == KERN_INVALID_ADDRESS) break;
         if (kr != KERN_SUCCESS) break;
-
-        if (info.is_submap) {
-            depth++;
-            continue;
-        }
 
         if (!RegionMatchesFilter(info.user_tag, info.protection, regionFilter)) {
             address += regionSize;
