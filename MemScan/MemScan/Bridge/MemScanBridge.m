@@ -2,6 +2,7 @@
 
 @import Darwin;
 #import <mach/vm_map.h>
+#import <mach/vm_region.h>
 #import <sys/sysctl.h>
 
 static task_t g_task = MACH_PORT_NULL;
@@ -221,13 +222,13 @@ static void ResultsReplace(MSScanMatch *items, size_t count) {
     mach_port_t objectName = MACH_PORT_NULL;
 
     while (1) {
-        struct vm_region_basic_info_64 info;
-        mach_msg_type_number_t infoCount = VM_REGION_BASIC_INFO_COUNT_64;
+        struct vm_region_extended_info info;
+        mach_msg_type_number_t infoCount = VM_REGION_EXTENDED_INFO_COUNT;
         kern_return_t kr = vm_region_64(
             g_task,
             &address,
             &regionSize,
-            VM_REGION_BASIC_INFO_64,
+            VM_REGION_EXTENDED_INFO,
             (vm_region_info_t)&info,
             &infoCount,
             &objectName
