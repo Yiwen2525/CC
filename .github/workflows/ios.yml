@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Locate Xcode project
         id: locate
@@ -30,6 +30,32 @@ jobs:
             ls -la
             exit 1
           fi
+
+      - name: Verify project files
+        working-directory: ${{ steps.locate.outputs.project_dir }}
+        run: |
+          missing=0
+          for f in \
+            MemScan/MemScanApp.swift \
+            MemScan/ContentView.swift \
+            MemScan/Services/ScanSession.swift \
+            MemScan/Services/ProcessService.swift \
+            MemScan/Bridge/MemScanBridge.m \
+            MemScan/MemScan-Bridging-Header.h
+          do
+            if [ ! -f "$f" ]; then
+              echo "MISSING: $f"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo ""
+            echo "ERROR: Required source files are missing on GitHub."
+            echo "Upload the entire MemScan folder, not just Bridge files."
+            echo "GitHub web upload often strips <...> from code — use Git instead."
+            exit 1
+          fi
+          echo "All required source files present."
 
       - name: Show build environment
         run: |
@@ -59,7 +85,7 @@ jobs:
             exit "$BUILD_STATUS"
           fi
 
-      - name: Package .app bundle
+      - name: Package unsigned IPA
         working-directory: ${{ steps.locate.outputs.project_dir }}
         run: |
           APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/MemScan.app"
@@ -78,14 +104,15 @@ jobs:
           echo "App bundle contents:"
           ls -la "$APP_PATH"
           file "$APP_PATH/MemScan"
-          mkdir -p build/output
-          cp -R "$APP_PATH" build/output/
-          cd build/output && zip -r ../MemScan-unsigned.zip MemScan.app
-          echo "Packaged: build/MemScan-unsigned.zip"
+          rm -rf build/Payload build/MemScan-unsigned.ipa
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          cd build && zip -qr MemScan-unsigned.ipa Payload
+          echo "Packaged: build/MemScan-unsigned.ipa"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MemScan-unsigned
-          path: ${{ steps.locate.outputs.project_dir }}/build/MemScan-unsigned.zip
+          name: MemScan-unsigned-ipa
+          path: ${{ steps.locate.outputs.project_dir }}/build/MemScan-unsigned.ipa
           retention-days: 14
